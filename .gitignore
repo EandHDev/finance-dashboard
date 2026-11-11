@@ -1,0 +1,6 @@
+# This repo is PUBLIC. Financial data must never be committed here.
+finances.json
+*.json
+!package.json
+snapshots/
+.DS_Store

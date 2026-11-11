@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finances">
+<meta name="theme-color" content="#0f172a">
+<title>Finance Dashboard</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --panel: #ffffff; --text: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --good: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --good-bg: #dcfce7; --warn-bg: #fef3c7; --bad-bg: #fee2e2; --info-bg: #dbeafe;
+    --bar: #e5e7eb; --radius: 14px; --shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1120; --panel: #111a2e; --text: #e5e7eb; --muted: #94a3b8; --line: #1f2a44;
+      --accent: #60a5fa; --good: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --good-bg: #052e16; --warn-bg: #3b2a05; --bad-bg: #3b0a0a; --info-bg: #0c2448;
+      --bar: #1f2a44; --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  button, input, select { font: inherit; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 14px; }
+
+  header.top { position: sticky; top: 0; z-index: 10; background: var(--panel); border-bottom: 1px solid var(--line);
+    padding-top: env(safe-area-inset-top); }
+  header.top .row { display: flex; align-items: center; gap: 8px; padding: 10px 0; }
+  header.top h1 { font-size: 17px; margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { border: 0; background: transparent; color: var(--muted); padding: 7px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .tab.active { background: var(--accent); color: #fff; }
+
+  .btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 10px;
+    padding: 7px 12px; cursor: pointer; white-space: nowrap; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.small { padding: 4px 9px; font-size: 13px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  main { padding: 16px 0 40px; }
+  .grid { display: grid; gap: 12px; }
+  .grid.stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .grid.cards { grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; }
+  .panel h3 { font-size: 14px; margin: 0 0 6px; }
+  section + section { margin-top: 14px; }
+  .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .big { font-size: 28px; font-weight: 700; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+
+  .bar { position: relative; height: 10px; background: var(--bar); border-radius: 99px; overflow: visible; margin: 8px 0 18px; }
+  .bar .fill { height: 100%; border-radius: 99px; }
+  .bar .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted); opacity: .7; }
+  .bar .tick span { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--muted); white-space: nowrap; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scroll-x { overflow-x: auto; }
+
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .pill.good { background: var(--good-bg); } .pill.warn { background: var(--warn-bg); }
+  .pill.bad { background: var(--bad-bg); } .pill.info { background: var(--info-bg); color: var(--accent); }
+
+  .alert { display: flex; gap: 10px; padding: 9px 11px; border-radius: 10px; margin-bottom: 8px; font-size: 14px; }
+  .alert.bad { background: var(--bad-bg); } .alert.warn { background: var(--warn-bg); } .alert.info { background: var(--info-bg); }
+  .alert b { white-space: nowrap; }
+
+  .action { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .action:last-child { border-bottom: 0; }
+  .action input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+  .action .body { flex: 1; min-width: 0; }
+  .action .amt { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .action.done .body, .action.done .amt { opacity: .45; text-decoration: line-through; }
+
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; font-size: 14px; }
+  .kv div:nth-child(odd) { color: var(--muted); }
+  .kv div:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+  ul.notes { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--muted); }
+
+  .cal-day { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .cal-day .d { width: 64px; flex: none; font-weight: 700; }
+  .cal-day .d small { display: block; font-weight: 400; color: var(--muted); }
+  .cal-day ul { margin: 0; padding: 0; list-style: none; flex: 1; }
+  .cal-day li { margin-bottom: 3px; }
+
+  svg.chart { width: 100%; height: auto; display: block; }
+  svg.chart text { fill: var(--muted); font-size: 11px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+
+  .center-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .auth { width: 100%; max-width: 420px; }
+  .auth h1 { font-size: 22px; margin: 0 0 4px; }
+  .field { margin: 12px 0; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .field input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+  .pin-input { font-size: 24px; letter-spacing: .4em; text-align: center; }
+  .error { color: var(--bad); font-size: 14px; min-height: 20px; margin-top: 6px; }
+  .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #111827; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 50; max-width: 90vw; }
+  .muted { color: var(--muted); }
+  .row-flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+  @media (max-width: 560px) {
+    .big { font-size: 24px; }
+    .hide-sm { display: none; }
+    th, td { padding: 6px 4px; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   ENGINE START — pure calculation functions (no DOM, no network)
+   ===================================================================== */
+
+const r2 = n => Math.round((+n || 0) * 100) / 100;
+
+function parseDate(s) {
+  if (!s || typeof s !== 'string') return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(+m[1], +m[2] - 1, +m[3]);
+}
+function isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function startOfToday() { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate()); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function addMonths(d, n) {
+  const day = d.getDate();
+  const x = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const last = new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate();
+  x.setDate(Math.min(day, last));
+  return x;
+}
+function daysUntil(d, today) { return Math.round((d - today) / 86400000); }
+
+function settingsOf(data) {
+  const s = Object.assign({
+    monthlyDebtBudget: 1000, targetScore: 740, maxUtilizationPct: 30, idealUtilizationPct: 10,
+    feeSafetyPct: 90, payBeforeClosingDays: 3, defaultAprIfUnknown: 30, lastUpdated: null
+  }, data.settings || {});
+  return s;
+}
+
+function activeAccounts(data) {
+  return (data.accounts || []).filter(a => !a.placeholder && !a.closed);
+}
+function isCard(a) { return a.type === 'card'; }
+function isInstallment(a) { return a.type === 'installment'; }
+function countsForUtil(a) { return isCard(a) && a.countsTowardUtilization !== false && (+a.limit || 0) > 0; }
+function aprOf(a, s) { return (a.apr === null || a.apr === undefined || a.apr === '') ? +s.defaultAprIfUnknown : +a.apr; }
+
+/** Minimum still owed for the current cycle (respectPaid) or a full monthly minimum (projection). */
+function minimumFor(a, balance, respectPaid) {
+  if (balance <= 0) return 0;
+  if (isCard(a)) {
+    const min = +a.minPayment || 0;
+    const owed = respectPaid ? Math.max(0, min - (+a.paidSinceStatement || 0)) : min;
+    return r2(Math.min(owed, balance));
+  }
+  return r2(Math.min(+a.payment || 0, balance));
+}
+
+function utilization(accts, balances) {
+  const util = accts.filter(countsForUtil);
+  const limit = util.reduce((t, a) => t + (+a.limit), 0);
+  const bal = util.reduce((t, a) => t + (balances ? balances[a.id] : (+a.balance || 0)), 0);
+  return { limit: r2(limit), balance: r2(bal), pct: limit > 0 ? bal / limit * 100 : 0 };
+}
+
+/**
+ * Split a budget across accounts using the agreed priority order:
+ *  1. Minimums on everything (always paid, even if over budget)
+ *  2. Cards above feeSafetyPct brought under it (over-limit / fee risk)
+ *  3. Cards brought under maxUtilizationPct (cheapest first)
+ *  4. Cards brought under idealUtilizationPct (cheapest first)
+ *  5. Everything else by highest APR (avalanche), smaller balance breaks ties
+ */
+function allocate(accts, s, budget, opts = {}) {
+  const respectPaid = !!opts.respectPaid;
+  const bal = {}; const pay = {}; const why = {};
+  accts.forEach(a => { bal[a.id] = Math.max(0, r2(a.balance)); });
+  let left = r2(budget);
+
+  const give = (a, amount, reason, force) => {
+    let amt = Math.min(amount, bal[a.id]);
+    if (!force) amt = Math.min(amt, Math.max(0, left));
+    amt = r2(amt);
+    if (amt <= 0) return 0;
+    bal[a.id] = r2(bal[a.id] - amt);
+    pay[a.id] = r2((pay[a.id] || 0) + amt);
+    (why[a.id] = why[a.id] || []).push({ reason, amount: amt });
+    left = r2(left - amt);
+    return amt;
+  };
+
+  // 1. minimums
+  let mins = 0;
+  accts.forEach(a => {
+    const m = minimumFor(a, bal[a.id], respectPaid);
+    if (m > 0) { give(a, m, isCard(a) ? 'Minimum payment' : 'Scheduled payment', true); mins = r2(mins + m); }
+  });
+  const shortfall = r2(Math.max(0, mins - budget));
+
+  // 2-4. utilization tiers
+  const utilCards = accts.filter(countsForUtil);
+  const tiers = [
+    [s.feeSafetyPct, `Under ${s.feeSafetyPct}% (over-limit/fee risk)`],
+    [s.maxUtilizationPct, `Under ${s.maxUtilizationPct}% utilization`],
+    [s.idealUtilizationPct, `Under ${s.idealUtilizationPct}% utilization`]
+  ];
+  for (const [pct, label] of tiers) {
+    const needs = utilCards
+      .map(a => ({ a, need: r2(bal[a.id] - (+a.limit) * pct / 100) }))
+      .filter(x => x.need > 0)
+      .sort((x, y) => x.need - y.need);
+    for (const { a, need } of needs) { if (left <= 0) break; give(a, need, label); }
+  }
+
+  // 5. avalanche
+  const rest = accts.filter(a => bal[a.id] > 0)
+    .sort((x, y) => (aprOf(y, s) - aprOf(x, s)) || (bal[x.id] - bal[y.id]));
+  for (const a of rest) { if (left <= 0) break; give(a, bal[a.id], `Highest APR first (${aprOf(a, s)}%)`); }
+
+  const total = r2(Object.values(pay).reduce((t, v) => t + v, 0));
+  return { pay, why, after: bal, mins, shortfall, left: r2(Math.max(0, left)), total };
+}
+
+/** Month-by-month simulation. Assumes no new spending. */
+function project(accts, s, budget, maxMonths = 120) {
+  const list = accts.map(a => Object.assign({}, a, { balance: Math.max(0, +a.balance || 0) }));
+  const totalDebt = () => r2(list.reduce((t, a) => t + a.balance, 0));
+  const balMap = () => Object.fromEntries(list.map(a => [a.id, a.balance]));
+  const series = [{ month: 0, debt: totalDebt(), util: utilization(list, balMap()).pct, paid: 0, interest: 0 }];
+  let interest = 0; let months = 0;
+  while (totalDebt() > 0.01 && months < maxMonths) {
+    months++;
+    let monthInterest = 0;
+    list.forEach(a => {
+      if (a.balance <= 0) return;
+      const i = a.balance * aprOf(a, s) / 100 / 12;
+      a.balance = r2(a.balance + i); monthInterest += i;
+    });
+    interest += monthInterest;
+    const plan = allocate(list, s, budget, { respectPaid: false });
+    list.forEach(a => { a.balance = plan.after[a.id]; });
+    series.push({ month: months, debt: totalDebt(), util: utilization(list, balMap()).pct, paid: plan.total, interest: r2(monthInterest) });
+  }
+  return { months, interest: r2(interest), series, finished: totalDebt() <= 0.01 };
+}
+
+/** Turn this month's allocation into dated to-dos. */
+function buildActions(accts, s, plan, today) {
+  const out = [];
+  const lead = +s.payBeforeClosingDays || 0;
+  for (const a of accts) {
+    const amt = plan.pay[a.id] || 0;
+    if (amt <= 0) continue;
+    const reasons = (plan.why[a.id] || []).map(w => w.reason);
+    if (isCard(a)) {
+      const minPart = r2(Math.min(amt, minimumFor(a, +a.balance || 0, true)));
+      const extra = r2(amt - minPart);
+      const due = parseDate(a.dueDate);
+      const close = parseDate(a.nextClosingDate);
+      // Pay `lead` days before closing; if that day has gone but closing hasn't, pay today.
+      const closeOk = close && close >= today;
+      const payBy = closeOk ? (addDays(close, -lead) < today ? today : addDays(close, -lead)) : null;
+      const dueOk = due && due >= today;
+      const push = (date, amount, label, kind, forceStatus) => out.push({
+        key: `${a.id}:${kind}:${a.statementDate || ''}`, id: a.id, name: a.name, last4: a.last4,
+        date, amount: r2(amount), label, kind, reasons,
+        status: forceStatus || (!date ? 'nodate' : (date < today ? 'overdue' : (daysUntil(date, today) <= 5 ? 'soon' : 'upcoming')))
+      });
+      if (minPart > 0) {
+        if (!dueOk) {
+          push(today, minPart, `Due date ${a.dueDate ? fmtShort(due) : '(not set)'} has passed. Confirm the minimum was paid; if not, pay it today.`, 'min', 'overdue');
+        } else if (closeOk && payBy <= due) {
+          push(payBy, r2(minPart + extra), `Pay before the statement closes ${fmtShort(close)}. Covers the minimum and lowers the reported balance.`, 'close');
+          continue;
+        } else {
+          push(due, minPart, `Minimum payment due ${fmtShort(due)}.`, 'min');
+        }
+      }
+      if (extra > 0) {
+        if (closeOk) push(payBy, extra, `Extra payment before the statement closes ${fmtShort(close)}, so the lower balance gets reported.`, 'close');
+        else push(dueOk ? due : today, extra, close ? `Closing date ${fmtShort(close)} has passed. Update nextClosingDate, then pay this before the new one.` : 'Add nextClosingDate so this can be timed before the statement closes.', 'extra');
+      }
+    } else {
+      const due = parseDate(a.nextDueDate);
+      const sched = r2(Math.min(+a.payment || 0, +a.balance || 0));
+      const schedPart = r2(Math.min(amt, sched));
+      const extra = r2(amt - schedPart);
+      const base = { id: a.id, name: `${a.name}${a.loanId ? ' · ' + a.loanId : ''}`, last4: '', reasons };
+      if (schedPart > 0) {
+        const overdue = due && due < today;
+        out.push(Object.assign({}, base, {
+          key: `${a.id}:sched:${a.nextDueDate || ''}`, date: overdue ? today : due, amount: schedPart, kind: 'sched',
+          label: overdue ? `Payment was due ${fmtShort(due)}. Confirm it went through (Affirm autopays), then move nextDueDate forward a month.` : `Scheduled payment due ${fmtShort(due)}.`,
+          status: !due ? 'nodate' : overdue ? 'overdue' : (daysUntil(due, today) <= 5 ? 'soon' : 'upcoming')
+        }));
+      }
+      if (extra > 0) {
+        out.push(Object.assign({}, base, {
+          key: `${a.id}:extra:${a.nextDueDate || ''}`, date: null, amount: extra, kind: 'extra',
+          label: 'Extra principal. Pay any time this month in the Affirm app ("Pay extra").', status: 'anytime'
+        }));
+      }
+    }
+  }
+  const rank = { overdue: 0, soon: 1, upcoming: 2, nodate: 3, anytime: 4 };
+  out.sort((x, y) => (rank[x.status] - rank[y.status]) || ((x.date || 0) - (y.date || 0)) || (y.amount - x.amount));
+  return out;
+}
+
+function buildAlerts(data, s, today) {
+  const alerts = [];
+  const add = (level, title, text) => alerts.push({ level, title, text });
+  const accts = data.accounts || [];
+  for (const a of accts) {
+    if (a.closed) continue;
+    if (a.placeholder) { add('info', a.name, 'Placeholder, left out of all calculations. Fill in its details and set placeholder to false.'); continue; }
+    const bal = +a.balance || 0;
+    if (isCard(a)) {
+      const due = parseDate(a.dueDate);
+      const unpaid = (+a.paidSinceStatement || 0) < (+a.minPayment || 0) && bal > 0;
+      if (due && unpaid && due < today) add('bad', `${a.name} · due date passed`, `Minimum of ${money(a.minPayment)} was due ${fmtShort(due)}. If it's paid, update paidSinceStatement. If not, pay today. Under 30 days late usually doesn't reach your credit report.`);
+      else if (due && unpaid && daysUntil(due, today) <= 5) add('warn', `${a.name} · due in ${daysUntil(due, today)} day(s)`, `Minimum ${money(a.minPayment)} due ${fmtShort(due)}.`);
+      if (countsForUtil(a)) {
+        const pct = bal / a.limit * 100;
+        if (bal > a.limit) add('bad', `${a.name} · over limit`, `${money(bal)} on a ${money(a.limit)} limit. Expect fees and heavy score damage.`);
+        else if (pct >= s.feeSafetyPct) add('bad', `${a.name} · ${pct.toFixed(0)}% used`, `Close to the limit. One more charge or interest posting could push it over.`);
+        else if (pct > s.maxUtilizationPct) add('warn', `${a.name} · ${pct.toFixed(0)}% used`, `Above ${s.maxUtilizationPct}%. Bring it down to ${money(a.limit * s.maxUtilizationPct / 100)} or less before it closes.`);
+      }
+      const close = parseDate(a.nextClosingDate);
+      if (!close) add('warn', `${a.name} · no closing date`, 'Add nextClosingDate so payments can be timed before it reports.');
+      else if (close < today) add('warn', `${a.name} · closing date passed`, `nextClosingDate (${fmtShort(close)}) is in the past. Enter the new statement and the next closing date.`);
+      else if (!a.closingDateConfirmed) add('info', `${a.name} · closing date is an estimate`, `Confirm ${fmtShort(close)} in the card's app, then set closingDateConfirmed to true.`);
+      if (a.apr === null || a.apr === undefined) add('info', `${a.name} · APR missing`, `Using ${s.defaultAprIfUnknown}% until you add it.`);
+    } else {
+      const due = parseDate(a.nextDueDate);
+      if (due && due < today && bal > 0) add('warn', `${a.name}${a.loanId ? ' · ' + a.loanId : ''}`, `Payment of ${money(a.payment)} was due ${fmtShort(due)}. Confirm it went through, then move nextDueDate forward and lower the balance.`);
+    }
+    (a.notes || []).forEach(n => add('info', a.name, n));
+  }
+  const active = activeAccounts(data);
+  const mins = active.reduce((t, a) => t + minimumFor(a, +a.balance || 0, false), 0);
+  if (mins > s.monthlyDebtBudget) add('bad', 'Budget below minimums', `Minimums total ${money(mins)} but the budget is ${money(s.monthlyDebtBudget)}.`);
+  const scores = (data.scores || []).filter(x => x && x.score && parseDate(x.date)).sort((x, y) => parseDate(y.date) - parseDate(x.date));
+  if (!scores.length) add('info', 'No credit score logged', 'Add your current score to the scores list so progress toward the target can be tracked.');
+  else if (daysUntil(parseDate(scores[0].date), today) < -40) add('info', 'Score is out of date', `Last logged ${fmtShort(parseDate(scores[0].date))}. Log a fresh one.`);
+  const upd = parseDate(s.lastUpdated);
+  if (upd && daysUntil(upd, today) < -35) add('warn', 'Data may be stale', `settings.lastUpdated is ${fmtShort(upd)}. Update balances from your latest statements.`);
+  const rank = { bad: 0, warn: 1, info: 2 };
+  return alerts.sort((x, y) => rank[x.level] - rank[y.level]);
+}
+
+/** Due/closing dates in the next N days; later months are estimated by rolling dates forward. */
+function buildCalendar(accts, today, days = 60) {
+  const end = addDays(today, days);
+  const ev = [];
+  const roll = (d, cb) => {
+    if (!d) return;
+    let x = d, i = 0, est = false;
+    while (x < today && i < 3) { x = addMonths(d, ++i); est = true; }
+    while (x <= end && i < 6) { cb(x, est); x = addMonths(d, ++i); est = true; }
+  };
+  for (const a of accts) {
+    if (isCard(a)) {
+      roll(parseDate(a.dueDate), (d, est) => ev.push({ date: d, est, kind: 'due', text: `${a.name} payment due`, amount: est ? null : a.minPayment }));
+      roll(parseDate(a.nextClosingDate), (d, est) => ev.push({ date: d, est: est || !a.closingDateConfirmed, kind: 'close', text: `${a.name} statement closes` }));
+    } else {
+      roll(parseDate(a.nextDueDate), (d, est) => ev.push({ date: d, est, kind: 'due', text: `${a.name}${a.loanId ? ' · ' + a.loanId : ''}`, amount: a.payment }));
+    }
+  }
+  ev.sort((x, y) => x.date - y.date || (x.kind === 'close') - (y.kind === 'close'));
+  return ev;
+}
+
+function buildSnapshot(data, s, today) {
+  const accts = activeAccounts(data);
+  const u = utilization(accts);
+  const cards = accts.filter(isCard); const inst = accts.filter(isInstallment);
+  const scores = (data.scores || []).filter(x => x && x.score).sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
+  return {
+    month: isoDate(today).slice(0, 7),
+    takenAt: new Date().toISOString(),
+    totals: {
+      debt: r2(accts.reduce((t, a) => t + (+a.balance || 0), 0)),
+      cardDebt: r2(cards.reduce((t, a) => t + (+a.balance || 0), 0)),
+      installmentDebt: r2(inst.reduce((t, a) => t + (+a.balance || 0), 0)),
+      utilizationPct: r2(u.pct), utilizationLimit: u.limit, cardsWithBalance: cards.filter(a => (+a.balance || 0) > 0).length
+    },
+    score: scores[0] || null,
+    accounts: accts.map(a => ({ id: a.id, name: a.name, type: a.type, balance: r2(a.balance), limit: a.limit || null, apr: a.apr ?? null }))
+  };
+}
+
+/* ---------- formatting (shared) ---------- */
+const moneyFmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const moneyFmt0 = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+function money(n) { return moneyFmt.format(+n || 0); }
+function money0(n) { return moneyFmt0.format(+n || 0); }
+function fmtShort(d) { return d ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'; }
+function fmtDay(d) { return d.toLocaleDateString('en-US', { weekday: 'short' }); }
+function monthLabel(offset, today) { const d = addMonths(new Date(today.getFullYear(), today.getMonth(), 1), offset); return `${d.toLocaleDateString('en-US', { month: 'short' })} '${String(d.getFullYear()).slice(2)}`; }
+/** Projection month m = after m months of payments; month 1 is the current month. */
+function planMonth(m, today) { return m === 0 ? 'Now' : monthLabel(m - 1, today); }
+
+/* ENGINE END */
+
+
+/* =====================================================================
+   STORAGE + CRYPTO — token is encrypted with a key derived from the PIN
+   ===================================================================== */
+const CFG_KEY = 'fd-config-v1';
+const FAIL_KEY = 'fd-pin-fails';
+const DONE_KEY = 'fd-done-v1';
+const MAX_FAILS = 5;
+const enc = new TextEncoder(); const dec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+function lsGet(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+function lsDel(k) { try { localStorage.removeItem(k); } catch {} }
+
+async function deriveKey(pin, salt) {
+  const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptToken(token, pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)); const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(pin, salt);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+  return { salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+}
+async function decryptToken(box, pin) {
+  const key = await deriveKey(pin, unb64(box.salt));
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(box.iv) }, key, unb64(box.ct));
+  return dec.decode(pt);
+}
+
+/* =====================================================================
+   GITHUB API — reads/writes the PRIVATE data repo
+   ===================================================================== */
+function utf8ToB64(str) { const bytes = enc.encode(str); let bin = ''; bytes.forEach(b => bin += String.fromCharCode(b)); return btoa(bin); }
+function b64ToUtf8(s) { return dec.decode(unb64(s.replace(/\s/g, ''))); }
+
+async function gh(cfg, token, path, opts = {}) {
+  const url = `https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}` +
+    (opts.method ? '' : `?ref=${encodeURIComponent(cfg.branch)}`);
+  const res = await fetch(url, {
+    method: opts.method || 'GET', cache: 'no-store',
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined
+  });
+  if (res.status === 404 && opts.allow404) return null;
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try { const j = await res.json(); if (j.message) msg = `${res.status}: ${j.message}`; } catch {}
+    if (res.status === 401) msg += ' (token invalid or expired)';
+    if (res.status === 404) msg += ' (check owner/repo/branch/path and that the token can see this repo)';
+    if (res.status === 403) msg += ' (token lacks Contents permission, or rate limited)';
+    throw new Error(msg);
+  }
+  return res.json();
+}
+async function ghReadJson(cfg, token, path, allow404) {
+  const f = await gh(cfg, token, path, { allow404 });
+  if (!f) return null;
+  if (Array.isArray(f)) return f;
+  let text = f.content ? b64ToUtf8(f.content) : null;
+  if (text === null && f.download_url) text = await (await fetch(f.download_url, { headers: { Authorization: `Bearer ${token}` } })).text();
+  try { return { json: JSON.parse(text), sha: f.sha }; }
+  catch (e) { throw new Error(`${path} is not valid JSON: ${e.message}`); }
+}
+async function ghWriteJson(cfg, token, path, obj, message) {
+  const existing = await gh(cfg, token, path, { allow404: true });
+  return gh(cfg, token, path, { method: 'PUT', body: {
+    message, branch: cfg.branch, content: utf8ToB64(JSON.stringify(obj, null, 2) + '\n'), ...(existing && existing.sha ? { sha: existing.sha } : {})
+  } });
+}
+
+/* =====================================================================
+   APP STATE + UI
+   ===================================================================== */
+const isLocalDev = location.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(location.hostname);
+const qs = new URLSearchParams(location.search);
+const state = { cfg: null, token: null, data: null, dataSha: null, snapshots: null, tab: qs.get('tab') || 'overview', loading: false, err: null, dev: false };
+const app = document.getElementById('app');
+
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function toast(msg, ms = 2800) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), ms);
+}
+
+/* ---------- setup ---------- */
+function renderSetup(errMsg = '') {
+  const c = lsGet(CFG_KEY) || {};
+  app.innerHTML = `
+  <div class="center-screen"><div class="auth panel">
+    <h1>Set up this device</h1>
+    <p class="sub">Connects to your <b>private</b> data repo. The token is encrypted with your PIN and stored only in this browser.</p>
+    <form id="setup">
+      <div class="field"><label>GitHub owner (your organization’s handle)</label><input name="owner" required autocomplete="off" autocapitalize="off" value="${esc(c.owner || '')}"></div>
+      <div class="field"><label>Private data repo</label><input name="repo" required autocapitalize="off" value="${esc(c.repo || 'finance-data')}"></div>
+      <div class="row-flex">
+        <div class="field" style="flex:1"><label>Branch</label><input name="branch" required autocapitalize="off" value="${esc(c.branch || 'main')}"></div>
+        <div class="field" style="flex:1"><label>Data file</label><input name="path" required autocapitalize="off" value="${esc(c.path || 'finances.json')}"></div>
+      </div>
+      <div class="field"><label>Fine-grained access token (Contents: read &amp; write, this repo only)</label>
+        <input name="token" type="password" required autocomplete="off" placeholder="github_pat_…"></div>
+      <div class="row-flex">
+        <div class="field" style="flex:1"><label>PIN (4+ digits)</label><input name="pin" type="password" inputmode="numeric" required minlength="4" autocomplete="new-password"></div>
+        <div class="field" style="flex:1"><label>Confirm PIN</label><input name="pin2" type="password" inputmode="numeric" required minlength="4" autocomplete="new-password"></div>
+      </div>
+      <button class="btn primary" style="width:100%" type="submit">Test connection &amp; save</button>
+      <div class="error" id="err">${esc(errMsg)}</div>
+    </form>
+    <p class="sub">After ${MAX_FAILS} wrong PIN attempts the stored token is wiped and you'll need to set up again.</p>
+  </div></div>`;
+  document.getElementById('setup').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target).entries());
+    const err = document.getElementById('err');
+    if (f.pin !== f.pin2) { err.textContent = 'PINs don’t match.'; return; }
+    if (!/^\d{4,}$/.test(f.pin)) { err.textContent = 'PIN must be at least 4 digits.'; return; }
+    const cfg = { owner: f.owner.trim(), repo: f.repo.trim(), branch: f.branch.trim(), path: f.path.trim() };
+    const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Testing…'; err.textContent = '';
+    try {
+      const r = await ghReadJson(cfg, f.token.trim(), cfg.path);
+      if (!r || !r.json || !Array.isArray(r.json.accounts)) throw new Error(`${cfg.path} loaded but has no "accounts" list.`);
+      const box = await encryptToken(f.token.trim(), f.pin);
+      lsSet(CFG_KEY, Object.assign(cfg, { box })); lsDel(FAIL_KEY);
+      state.cfg = cfg; state.token = f.token.trim(); state.data = r.json; state.dataSha = r.sha;
+      renderApp(); toast('Connected. This device is set up.');
+    } catch (ex) { err.textContent = ex.message; btn.disabled = false; btn.textContent = 'Test connection & save'; }
+  });
+}
+
+/* ---------- lock ---------- */
+function renderLock(msg = '') {
+  const fails = +(lsGet(FAIL_KEY) || 0);
+  app.innerHTML = `
+  <div class="center-screen"><div class="auth panel" style="text-align:center">
+    <h1>Finance Dashboard</h1>
+    <p class="sub">Enter your PIN</p>
+    <form id="lock">
+      <div class="field"><input class="pin-input" name="pin" type="password" inputmode="numeric" autocomplete="current-password" autofocus required></div>
+      <button class="btn primary" style="width:100%" type="submit">Unlock</button>
+      <div class="error" id="err">${esc(msg)}${fails ? ` ${MAX_FAILS - fails} attempt(s) left.` : ''}</div>
+    </form>
+    <p><a href="#" id="reset" class="sub">Forget this device</a></p>
+  </div></div>`;
+  const input = app.querySelector('input'); setTimeout(() => input.focus(), 50);
+  document.getElementById('reset').addEventListener('click', e => {
+    e.preventDefault();
+    if (confirm('Remove the saved token from this device? You will need the token again to set up.')) { lsDel(CFG_KEY); lsDel(FAIL_KEY); renderSetup(); }
+  });
+  document.getElementById('lock').addEventListener('submit', async e => {
+    e.preventDefault();
+    const pin = input.value; const cfg = lsGet(CFG_KEY);
+    const btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Unlocking…';
+    try {
+      state.token = await decryptToken(cfg.box, pin);
+      state.cfg = cfg; lsDel(FAIL_KEY);
+      await loadData(); renderApp();
+    } catch (ex) {
+      if (state.token) { state.err = ex.message; renderApp(); return; }
+      const n = +(lsGet(FAIL_KEY) || 0) + 1;
+      if (n >= MAX_FAILS) { lsDel(CFG_KEY); lsDel(FAIL_KEY); renderSetup('Too many wrong PINs. The saved token was wiped from this device.'); return; }
+      lsSet(FAIL_KEY, n); renderLock('Wrong PIN.');
+    }
+  });
+}
+function lock() { state.token = null; state.data = null; state.snapshots = null; renderLock(); }
+
+/* ---------- data ---------- */
+async function loadData() {
+  state.err = null;
+  if (state.dev) {
+    const res = await fetch(qs.get('data') || 'finances.json', { cache: 'no-store' });
+    state.data = await res.json(); state.snapshots = [];
+    return;
+  }
+  const r = await ghReadJson(state.cfg, state.token, state.cfg.path);
+  state.data = r.json; state.dataSha = r.sha; state.snapshots = null;
+}
+async function loadSnapshots() {
+  if (state.dev) { state.snapshots = state.snapshots || []; return; }
+  const list = await ghReadJson(state.cfg, state.token, 'snapshots', true);
+  const files = (Array.isArray(list) ? list : []).filter(f => /^\d{4}-\d{2}\.json$/.test(f.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(-24);
+  const out = [];
+  for (const f of files) { try { const r = await ghReadJson(state.cfg, state.token, f.path); out.push(r.json); } catch {} }
+  state.snapshots = out;
+}
+async function takeSnapshot() {
+  const s = settingsOf(state.data); const today = startOfToday();
+  const snap = buildSnapshot(state.data, s, today);
+  const path = `snapshots/${snap.month}.json`;
+  if (state.dev) { state.snapshots = (state.snapshots || []).filter(x => x.month !== snap.month).concat(snap); toast('Dev mode: snapshot kept in memory only.'); renderApp(); return; }
+  const exists = await gh(state.cfg, state.token, path, { allow404: true });
+  if (exists && !confirm(`A snapshot for ${snap.month} already exists. Replace it with today's numbers?`)) return;
+  await ghWriteJson(state.cfg, state.token, path, snap, `Snapshot ${snap.month}`);
+  toast(`Saved ${path} to ${state.cfg.repo}`);
+  await loadSnapshots(); renderApp();
+}
+
+/* ---------- charts ---------- */
+function lineChart(series, o = {}) {
+  const W = 640, H = o.height || 230, P = { l: 52, r: 12, t: 12, b: 28 };
+  const pts = series.flatMap(s => s.points);
+  if (!pts.length) return '<p class="sub">Not enough data yet.</p>';
+  const xs = pts.map(p => p.x); const ys = pts.map(p => p.y).concat((o.refs || []).map(r => r.y));
+  const xMin = Math.min(...xs), xMax = Math.max(...xs, xMin + 1);
+  const yMin = o.yMin ?? 0, yMax = Math.max(...ys, yMin + 1) * 1.08;
+  const X = x => P.l + (x - xMin) / (xMax - xMin) * (W - P.l - P.r);
+  const Y = y => H - P.b - (y - yMin) / (yMax - yMin) * (H - P.t - P.b);
+  const fmt = o.yFmt || (v => v.toFixed(0));
+  let g = '';
+  for (let i = 0; i <= 4; i++) {
+    const v = yMin + (yMax - yMin) * i / 4;
+    g += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${P.l - 6}" y="${Y(v) + 4}" text-anchor="end">${esc(fmt(v))}</text>`;
+  }
+  const labels = (o.xLabels || []).filter(l => l.x >= xMin && l.x <= xMax);
+  const step = Math.max(1, Math.ceil(labels.length / 7));
+  labels.forEach((l, i) => { if (i % step === 0 || i === labels.length - 1) g += `<text x="${X(l.x)}" y="${H - 8}" text-anchor="${i === labels.length - 1 ? 'end' : i === 0 ? 'start' : 'middle'}">${esc(l.label)}</text>`; });
+  (o.refs || []).forEach(r => {
+    g += `<line x1="${P.l}" x2="${W - P.r}" y1="${Y(r.y)}" y2="${Y(r.y)}" stroke="${r.color}" stroke-dasharray="5 4"/><text x="${W - P.r - 2}" y="${Y(r.y) - 4}" text-anchor="end" style="fill:${r.color}">${esc(r.label)}</text>`;
+  });
+  series.forEach(s => {
+    const d = s.points.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join(' ');
+    g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.5" stroke-linejoin="round" ${s.dash ? 'stroke-dasharray="6 5"' : ''}/>`;
+    if (s.points.length <= 30) s.points.forEach(p => g += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="3" fill="${s.color}"><title>${esc(p.title || '')}</title></circle>`);
+  });
+  const legend = series.length > 1 || o.legend ? `<div class="legend">${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>` : '';
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${g}</svg>${legend}`;
+}
+
+function utilBar(pct, s) {
+  const color = pct >= s.feeSafetyPct ? 'var(--bad)' : pct > s.maxUtilizationPct ? 'var(--warn)' : pct > s.idealUtilizationPct ? 'var(--accent)' : 'var(--good)';
+  return `<div class="bar"><div class="fill" style="width:${Math.min(100, Math.max(0, pct)).toFixed(1)}%;background:${color}"></div>
+    <div class="tick" style="left:${s.idealUtilizationPct}%"><span>${s.idealUtilizationPct}%</span></div>
+    <div class="tick" style="left:${s.maxUtilizationPct}%"><span>${s.maxUtilizationPct}%</span></div></div>`;
+}
+function utilClass(pct, s) { return pct >= s.feeSafetyPct ? 'bad' : pct > s.maxUtilizationPct ? 'warn' : pct > s.idealUtilizationPct ? '' : 'good'; }
+
+/* ---------- views ---------- */
+function computeAll() {
+  const s = settingsOf(state.data); const today = startOfToday();
+  const accts = activeAccounts(state.data);
+  const plan = allocate(accts, s, s.monthlyDebtBudget, { respectPaid: true });
+  const proj = project(accts, s, s.monthlyDebtBudget);
+  const minsOnly = accts.reduce((t, a) => t + minimumFor(a, +a.balance || 0, false), 0);
+  const base = project(accts, s, minsOnly);
+  const actions = buildActions(accts, s, plan, today);
+  const alerts = buildAlerts(state.data, s, today);
+  const util = utilization(accts);
+  const totalDebt = r2(accts.reduce((t, a) => t + (+a.balance || 0), 0));
+  const scores = (state.data.scores || []).filter(x => x && x.score && parseDate(x.date)).sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  return { s, today, accts, plan, proj, base, minsOnly, actions, alerts, util, totalDebt, scores };
+}
+
+function viewOverview(c) {
+  const { s, util, totalDebt, proj, scores, alerts, actions, accts, plan } = c;
+  const latest = scores[scores.length - 1];
+  const scoreGap = latest ? latest.score - s.targetScore : null;
+  const cards = accts.filter(countsForUtil);
+  const cardsWithBal = accts.filter(isCard).filter(a => (+a.balance || 0) > 0).length;
+  const instDebt = r2(accts.filter(isInstallment).reduce((t, a) => t + (+a.balance || 0), 0));
+  const afterUtil = utilization(accts, plan.after);
+  const rows = cards.map(a => {
+    const bal = +a.balance || 0; const pct = bal / a.limit * 100;
+    const t30 = a.limit * s.maxUtilizationPct / 100, t10 = a.limit * s.idealUtilizationPct / 100;
+    return `<tr><td>${esc(a.name)} <span class="sub">${esc(a.last4 || '')}</span></td>
+      <td class="num">${money(bal)}</td><td class="num ${utilClass(pct, s)}">${pct.toFixed(0)}%</td>
+      <td class="num">${money0(t30)}</td><td class="num ${bal > t30 ? 'warn' : 'good'}">${bal > t30 ? '−' + money0(bal - t30) : '✓'}</td>
+      <td class="num hide-sm">${money0(t10)}</td><td class="num hide-sm ${bal > t10 ? '' : 'good'}">${bal > t10 ? '−' + money0(bal - t10) : '✓'}</td>
+      <td class="num hide-sm">${money0(plan.after[a.id])}</td></tr>`;
+  }).join('');
+  const due = actions.filter(a => a.status === 'overdue' || a.status === 'soon');
+  return `
+  <section class="grid stats">
+    <div class="panel"><div class="label">Total debt</div><div class="big">${money0(totalDebt)}</div>
+      <div class="sub">Cards ${money0(totalDebt - instDebt)} · Installments ${money0(instDebt)}</div></div>
+    <div class="panel"><div class="label">Card utilization</div><div class="big ${utilClass(util.pct, s)}">${util.pct.toFixed(0)}%</div>
+      ${utilBar(util.pct, s)}<div class="sub">${money0(util.balance)} of ${money0(util.limit)} · target ≤ ${s.idealUtilizationPct}% (${money0(util.limit * s.idealUtilizationPct / 100)})</div></div>
+    <div class="panel"><div class="label">Credit score</div>
+      ${latest ? `<div class="big ${scoreGap >= 0 ? 'good' : 'warn'}">${latest.score}</div><div class="sub">${scoreGap >= 0 ? `${scoreGap} above` : `${-scoreGap} below`} target ${s.targetScore} · ${esc(latest.source || '')} ${fmtShort(parseDate(latest.date))}</div>`
+        : `<div class="big muted">—</div><div class="sub">Target ${s.targetScore}. Log a score in finances.json.</div>`}</div>
+    <div class="panel"><div class="label">Debt-free (at ${money0(s.monthlyDebtBudget)}/mo)</div>
+      <div class="big">${proj.finished ? `${proj.months} mo` : '10+ yrs'}</div>
+      <div class="sub">${proj.finished ? `${planMonth(proj.months, c.today)} · ~${money0(proj.interest)} interest` : 'Budget too low to finish'}${cardsWithBal ? ` · ${cardsWithBal} cards carrying balances` : ''}</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Where you are vs where you ought to be</h2>
+    <div class="scroll-x"><table>
+      <thead><tr><th>Card</th><th class="num">Balance</th><th class="num">Used</th><th class="num">${s.maxUtilizationPct}% max</th><th class="num">Gap</th><th class="num hide-sm">${s.idealUtilizationPct}% ideal</th><th class="num hide-sm">Gap</th><th class="num hide-sm">After plan</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><th>All cards</th><th class="num">${money(util.balance)}</th><th class="num ${utilClass(util.pct, s)}">${util.pct.toFixed(0)}%</th><th class="num">${money0(util.limit * s.maxUtilizationPct / 100)}</th><th></th><th class="num hide-sm">${money0(util.limit * s.idealUtilizationPct / 100)}</th><th class="hide-sm"></th><th class="num hide-sm">${afterUtil.pct.toFixed(0)}%</th></tr></tfoot>
+    </table></div>
+    <p class="sub">"After plan" is each balance once this month's ${money0(plan.total)} is paid as scheduled under Actions.</p>
+  </section>
+
+  ${due.length ? `<section class="panel"><h2>Needs attention now</h2>${due.map(actionRow).join('')}
+    <p class="sub"><a href="#" data-tab="actions">All of this month's actions →</a></p></section>` : ''}
+
+  <section class="panel"><h2>Alerts</h2>
+    ${alerts.length ? alerts.map(a => `<div class="alert ${a.level}"><div><b>${esc(a.title)}</b><br>${esc(a.text)}</div></div>`).join('') : '<p class="sub good">Nothing to flag.</p>'}
+  </section>`;
+}
+
+function actionRow(a) {
+  const done = (lsGet(DONE_KEY) || {})[a.key];
+  const pill = { overdue: '<span class="pill bad">Overdue</span>', soon: '<span class="pill warn">Due soon</span>', upcoming: '<span class="pill info">Upcoming</span>', anytime: '<span class="pill good">Any time</span>', nodate: '<span class="pill warn">No date</span>' }[a.status] || '';
+  return `<label class="action ${done ? 'done' : ''}">
+    <input type="checkbox" data-done="${esc(a.key)}" ${done ? 'checked' : ''}>
+    <div class="body"><div><b>${esc(a.name)}</b> ${a.last4 ? `<span class="sub">${esc(a.last4)}</span>` : ''} ${pill}</div>
+      <div class="sub">${a.date ? `<b>By ${fmtDay(a.date)} ${fmtShort(a.date)}</b> · ` : ''}${esc(a.label)}</div>
+      <div class="sub">${esc([...new Set(a.reasons)].join(' · '))}</div></div>
+    <div class="amt">${money(a.amount)}</div></label>`;
+}
+
+function viewActions(c) {
+  const { plan, actions, s } = c;
+  const allZero = c.accts.filter(countsForUtil).every(a => (plan.after[a.id] || 0) === 0);
+  return `
+  <section class="panel">
+    <div class="row-flex"><h2 style="margin:0">This month's plan</h2><span class="spacer"></span>
+      <span class="sub">Budget ${money(s.monthlyDebtBudget)} · Minimums still owed ${money(plan.mins)}</span></div>
+    ${plan.shortfall > 0 ? `<div class="alert bad" style="margin-top:10px"><div><b>Short by ${money(plan.shortfall)}</b><br>Minimums are more than the budget. Minimums come first no matter what.</div></div>` : ''}
+    ${plan.left > 0 ? `<div class="alert info" style="margin-top:10px"><div><b>${money(plan.left)} unallocated</b><br>Everything is covered. Put it into savings or an emergency fund.</div></div>` : ''}
+    ${allZero && plan.total > 0 ? `<div class="alert info" style="margin-top:10px"><div><b>All cards reach $0</b><br>For the best score, let one card report a small balance (e.g. $10–$30) on its closing date, then pay it in full by the due date.</div></div>` : ''}
+    <div style="margin-top:6px">${actions.length ? actions.map(actionRow).join('') : '<p class="sub">No payments needed.</p>'}</div>
+    <p class="sub">Ticks are saved on this device only. When a payment goes through, update the balance (and <code>paidSinceStatement</code> or <code>nextDueDate</code>) in finances.json and the plan recalculates.</p>
+  </section>
+  <section class="panel"><h2>How the ${money0(s.monthlyDebtBudget)} is split</h2>
+    <ol class="sub" style="margin:0;padding-left:18px">
+      <li>Minimums on everything. Late payments do the most damage.</li>
+      <li>Cards above ${s.feeSafetyPct}% get pulled under it (over-limit fees, maxed-out penalty).</li>
+      <li>Every card under ${s.maxUtilizationPct}%, smallest gap first.</li>
+      <li>Every card under ${s.idealUtilizationPct}%, smallest gap first. That's where a ${s.targetScore}+ score lives.</li>
+      <li>Everything left goes to the highest APR first (avalanche), Affirm included.</li>
+    </ol>
+    <p class="sub">Card payments are timed ${s.payBeforeClosingDays} days before the statement <b>closes</b>, so the lower balance is what gets reported.</p>
+  </section>`;
+}
+
+function viewAccounts(c) {
+  const { s, plan } = c;
+  const all = (state.data.accounts || []).filter(a => !a.closed);
+  const cards = all.filter(isCard);
+  const inst = all.filter(isInstallment);
+  const cardHtml = cards.map(a => {
+    if (a.placeholder) return `<div class="panel"><h3>${esc(a.name)} <span class="pill info">Placeholder</span></h3><p class="sub">Not counted yet. Fill in limit, balance and dates in finances.json, then set <code>placeholder: false</code>.</p>${(a.notes || []).length ? `<ul class="notes">${a.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}</div>`;
+    const bal = +a.balance || 0; const pct = a.limit ? bal / a.limit * 100 : 0;
+    return `<div class="panel">
+      <div class="row-flex"><h3 style="margin:0">${esc(a.name)}</h3><span class="sub">${esc(a.last4 || '')}</span><span class="spacer"></span>
+        ${countsForUtil(a) ? `<span class="pill ${utilClass(pct, s) || 'info'}">${pct.toFixed(0)}%</span>` : '<span class="pill info">Not in utilization</span>'}</div>
+      ${a.limit ? utilBar(pct, s) : ''}
+      <div class="kv">
+        <div>Balance</div><div>${money(bal)} / ${money0(a.limit)}</div>
+        <div>APR</div><div>${a.apr === null || a.apr === undefined ? `<span class="warn">unknown (using ${s.defaultAprIfUnknown}%)</span>` : a.apr + '%'}</div>
+        <div>Interest / month</div><div>~${money(bal * aprOf(a, s) / 100 / 12)}</div>
+        <div>Minimum</div><div>${money(a.minPayment)}${(+a.paidSinceStatement || 0) >= (+a.minPayment || 0) && a.minPayment ? ' <span class="good">✓ paid</span>' : ''}</div>
+        <div>Paid since statement</div><div>${money(a.paidSinceStatement)}</div>
+        <div>Due</div><div>${fmtShort(parseDate(a.dueDate))}</div>
+        <div>Next closing</div><div>${fmtShort(parseDate(a.nextClosingDate))}${a.closingDateConfirmed ? '' : ' <span class="sub">(est.)</span>'}</div>
+        <div>Target ≤ ${s.maxUtilizationPct}% / ${s.idealUtilizationPct}%</div><div>${money0(a.limit * s.maxUtilizationPct / 100)} / ${money0(a.limit * s.idealUtilizationPct / 100)}</div>
+        <div>This month's plan</div><div><b>${money(plan.pay[a.id] || 0)}</b></div>
+      </div>
+      ${(a.notes || []).length ? `<ul class="notes">${a.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
+    </div>`;
+  }).join('');
+  const byLender = {};
+  inst.forEach(a => (byLender[a.lender || 'Other'] = byLender[a.lender || 'Other'] || []).push(a));
+  const instHtml = Object.entries(byLender).map(([lender, list]) => {
+    const active = list.filter(a => !a.placeholder);
+    const tot = active.reduce((t, a) => t + (+a.balance || 0), 0);
+    const monthly = active.reduce((t, a) => t + Math.min(+a.payment || 0, +a.balance || 0), 0);
+    const rows = list.slice().sort((x, y) => (parseDate(x.nextDueDate) || 0) - (parseDate(y.nextDueDate) || 0)).map(a => {
+      const due = parseDate(a.nextDueDate); const late = due && due < c.today;
+      const months = (+a.payment || 0) > 0 ? Math.ceil((+a.balance || 0) / a.payment) : null;
+      return `<tr><td>${esc(a.name)}<br><span class="sub">${esc(a.loanId || '')}</span></td>
+        <td class="num">${money(a.balance)}</td><td class="num">${a.apr ?? '—'}%</td><td class="num">${money(a.payment)}</td>
+        <td class="num ${late ? 'warn' : ''}">${fmtShort(due)}</td><td class="num hide-sm">~${months ?? '—'}</td><td class="num hide-sm">${money(plan.pay[a.id] || 0)}</td></tr>`;
+    }).join('');
+    return `<section class="panel"><div class="row-flex"><h2 style="margin:0">${esc(lender)}</h2><span class="spacer"></span>
+      <span class="sub">${active.length} loans · ${money(tot)} · ${money(monthly)}/mo scheduled</span></div>
+      <div class="scroll-x"><table><thead><tr><th>Loan</th><th class="num">Balance</th><th class="num">APR</th><th class="num">Payment</th><th class="num">Next due</th><th class="num hide-sm">Payments left</th><th class="num hide-sm">Plan</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="sub">Installment loans don't count toward utilization, but late payments still hurt your score. At 30–36% APR they're expensive, so the avalanche step pays them off early.</p></section>`;
+  }).join('');
+  return `<section class="grid cards">${cardHtml}</section>${instHtml}`;
+}
+
+function viewCalendar(c) {
+  const ev = buildCalendar(c.accts, c.today, 60);
+  const groups = {};
+  ev.forEach(e => (groups[isoDate(e.date)] = groups[isoDate(e.date)] || []).push(e));
+  const html = Object.entries(groups).map(([iso, list]) => {
+    const d = parseDate(iso); const n = daysUntil(d, c.today);
+    return `<div class="cal-day"><div class="d">${fmtShort(d)}<small>${fmtDay(d)} · ${n === 0 ? 'today' : n === 1 ? 'tomorrow' : `in ${n}d`}</small></div>
+      <ul>${list.map(e => `<li>${e.kind === 'close' ? '<span class="pill info">Closes</span>' : '<span class="pill warn">Due</span>'} ${esc(e.text)}${e.amount ? ` · ${money(e.amount)}` : ''}${e.est ? ' <span class="sub">(est.)</span>' : ''}</li>`).join('')}</ul></div>`;
+  }).join('');
+  return `<section class="panel"><h2>Next 60 days</h2>${html || '<p class="sub">No dates set.</p>'}
+    <p class="sub"><b>Closes</b> is when the balance gets reported, so pay down before it. <b>Due</b> is the last day to avoid a late payment. Estimated dates roll forward one month from the dates in finances.json.</p></section>`;
+}
+
+function viewPayoff(c) {
+  const { proj, base, s, minsOnly, today } = c;
+  const pts = (p, n) => p.series.slice(0, n + 1).map(x => ({ x: x.month, y: x.debt, title: `${planMonth(x.month, today)}: ${money0(x.debt)}` }));
+  const horizon = Math.min(Math.max(proj.months, 6), 60);
+  const chart = lineChart([
+    { name: `Plan (${money0(s.monthlyDebtBudget)}/mo)`, color: 'var(--accent)', points: pts(proj, horizon) },
+    { name: `Minimums only (${money0(minsOnly)}/mo)`, color: 'var(--bad)', dash: true, points: pts(base, horizon) }
+  ], { yFmt: v => money0(v), xLabels: Array.from({ length: horizon + 1 }, (_, i) => ({ x: i, label: planMonth(i, today) })) });
+  const utilChart = lineChart([{ name: 'Card utilization', color: 'var(--accent)', points: proj.series.slice(0, horizon + 1).map(x => ({ x: x.month, y: x.util, title: `${planMonth(x.month, today)}: ${x.util.toFixed(0)}%` })) }],
+    { yFmt: v => v.toFixed(0) + '%', height: 180, refs: [{ y: s.maxUtilizationPct, label: `${s.maxUtilizationPct}%`, color: 'var(--warn)' }, { y: s.idealUtilizationPct, label: `${s.idealUtilizationPct}%`, color: 'var(--good)' }],
+      xLabels: Array.from({ length: horizon + 1 }, (_, i) => ({ x: i, label: planMonth(i, today) })) });
+  const hit = t => { const m = proj.series.find(x => x.util <= t); return m ? planMonth(m.month, today) : '—'; };
+  const rows = proj.series.slice(1, 25).map(x => `<tr><td>${planMonth(x.month, today)}</td><td class="num">${money0(x.paid)}</td><td class="num">${money(x.interest)}</td><td class="num">${money0(x.debt)}</td><td class="num ${utilClass(x.util, s)}">${x.util.toFixed(0)}%</td></tr>`).join('');
+  return `
+  <section class="grid stats">
+    <div class="panel"><div class="label">Debt-free</div><div class="big">${proj.finished ? planMonth(proj.months, today) : '10+ yrs'}</div><div class="sub">End of month ${proj.months}, counting this month, at ${money0(s.monthlyDebtBudget)}/mo</div></div>
+    <div class="panel"><div class="label">Interest on this plan</div><div class="big">${money0(proj.interest)}</div><div class="sub">vs ${base.finished ? money0(base.interest) + ` over ${base.months} mo` : '10+ years'} paying minimums only</div></div>
+    <div class="panel"><div class="label">Cards under ${s.maxUtilizationPct}%</div><div class="big">${hit(s.maxUtilizationPct)}</div><div class="sub">Under ${s.idealUtilizationPct}% by ${hit(s.idealUtilizationPct)}</div></div>
+  </section>
+  <section class="panel"><h2>Total debt over time</h2>${chart}</section>
+  <section class="panel"><h2>Card utilization over time</h2>${utilChart}</section>
+  <section class="panel"><h2>Month by month</h2><div class="scroll-x"><table>
+    <thead><tr><th>Payments in</th><th class="num">Paid</th><th class="num">Interest</th><th class="num">Debt left</th><th class="num">Util.</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="sub">Estimate: assumes no new spending, current APRs, and fixed minimums and installment payments.</p></section>`;
+}
+
+function viewHistory(c) {
+  const { s, scores, today } = c;
+  if (state.snapshots === null) {
+    loadSnapshots().then(renderApp).catch(e => { state.snapshots = []; toast('Could not load snapshots: ' + e.message, 5000); renderApp(); });
+    return '<section class="panel"><p class="sub">Loading snapshots…</p></section>';
+  }
+  const snaps = state.snapshots.slice().sort((a, b) => a.month.localeCompare(b.month));
+  const thisMonth = isoDate(today).slice(0, 7);
+  const label = m => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); };
+  const xl = snaps.map((x, i) => ({ x: i, label: label(x.month) }));
+  const utilChart = snaps.length ? lineChart([{ name: 'Utilization', color: 'var(--accent)', points: snaps.map((x, i) => ({ x: i, y: x.totals.utilizationPct, title: `${label(x.month)}: ${x.totals.utilizationPct}%` })) }],
+    { yFmt: v => v.toFixed(0) + '%', xLabels: xl, refs: [{ y: s.maxUtilizationPct, label: `${s.maxUtilizationPct}%`, color: 'var(--warn)' }, { y: s.idealUtilizationPct, label: `${s.idealUtilizationPct}%`, color: 'var(--good)' }] }) : '';
+  const debtChart = snaps.length ? lineChart([
+    { name: 'Cards', color: 'var(--accent)', points: snaps.map((x, i) => ({ x: i, y: x.totals.cardDebt, title: money0(x.totals.cardDebt) })) },
+    { name: 'Installments', color: 'var(--warn)', points: snaps.map((x, i) => ({ x: i, y: x.totals.installmentDebt, title: money0(x.totals.installmentDebt) })) },
+    { name: 'Total', color: 'var(--text)', points: snaps.map((x, i) => ({ x: i, y: x.totals.debt, title: money0(x.totals.debt) })) }
+  ], { yFmt: v => money0(v), xLabels: xl }) : '';
+  const scoreChart = scores.length ? lineChart([{ name: 'Score', color: 'var(--good)', points: scores.map((x, i) => ({ x: i, y: x.score, title: `${x.date}: ${x.score}` })) }],
+    { yMin: Math.min(...scores.map(x => x.score), s.targetScore) - 40, yFmt: v => v.toFixed(0), height: 180, refs: [{ y: s.targetScore, label: `Target ${s.targetScore}`, color: 'var(--good)' }],
+      xLabels: scores.map((x, i) => ({ x: i, label: fmtShort(parseDate(x.date)) })) }) : '<p class="sub">No scores logged yet. Add entries to <code>scores</code> in finances.json.</p>';
+  const rows = snaps.slice().reverse().map(x => `<tr><td>${label(x.month)}</td><td class="num">${money0(x.totals.debt)}</td><td class="num">${money0(x.totals.cardDebt)}</td><td class="num">${money0(x.totals.installmentDebt)}</td><td class="num ${utilClass(x.totals.utilizationPct, s)}">${x.totals.utilizationPct}%</td><td class="num">${x.score ? x.score.score : '—'}</td></tr>`).join('');
+  return `
+  <section class="panel"><div class="row-flex"><h2 style="margin:0">Monthly snapshots</h2><span class="spacer"></span>
+    <button class="btn primary small" data-act="snapshot">${snaps.some(x => x.month === thisMonth) ? 'Update' : 'Take'} ${label(thisMonth)} snapshot</button></div>
+    <p class="sub">Take one each month after updating balances. Saved to <code>snapshots/</code> in your private repo.</p>
+    ${snaps.length ? `<div class="scroll-x"><table><thead><tr><th>Month</th><th class="num">Total</th><th class="num">Cards</th><th class="num">Installments</th><th class="num">Util.</th><th class="num">Score</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="sub">No snapshots yet.</p>'}
+  </section>
+  ${snaps.length > 1 ? `<section class="panel"><h2>Utilization</h2>${utilChart}</section><section class="panel"><h2>Debt</h2>${debtChart}</section>` : ''}
+  <section class="panel"><h2>Credit score</h2>${scoreChart}</section>`;
+}
+
+const TABS = [['overview', 'Overview'], ['actions', 'Actions'], ['accounts', 'Accounts'], ['calendar', 'Calendar'], ['payoff', 'Payoff'], ['history', 'History']];
+
+function renderApp() {
+  if (!state.data) { app.innerHTML = `<div class="center-screen"><div class="panel">${state.err ? `<p class="error">${esc(state.err)}</p><button class="btn" data-act="reload">Retry</button> <button class="btn" data-act="lock">Lock</button>` : 'Loading…'}</div></div>`; return; }
+  let body;
+  try {
+    const c = computeAll();
+    const views = { overview: viewOverview, actions: viewActions, accounts: viewAccounts, calendar: viewCalendar, payoff: viewPayoff, history: viewHistory };
+    body = (views[state.tab] || viewOverview)(c);
+  } catch (e) {
+    console.error(e);
+    body = `<section class="panel"><p class="error">Couldn't calculate: ${esc(e.message)}</p><p class="sub">Usually a typo in finances.json (a missing number or a date not in YYYY-MM-DD form).</p></section>`;
+  }
+  const editUrl = state.cfg ? `https://github.com/${encodeURIComponent(state.cfg.owner)}/${encodeURIComponent(state.cfg.repo)}/edit/${encodeURIComponent(state.cfg.branch)}/${state.cfg.path}` : '#';
+  const upd = parseDate(settingsOf(state.data).lastUpdated);
+  app.innerHTML = `
+  <header class="top"><div class="wrap">
+    <div class="row">
+      <h1>Finances <span class="sub" style="font-weight:400">${state.dev ? '· DEV DATA' : upd ? '· data ' + fmtShort(upd) : ''}</span></h1>
+      ${state.dev ? '' : `<a class="btn small" href="${editUrl}" target="_blank" rel="noopener">Edit JSON</a>`}
+      <button class="btn small" data-act="reload" title="Reload data">↻</button>
+      ${state.dev ? '' : '<button class="btn small" data-act="lock" title="Lock">🔒</button>'}
+    </div>
+    <nav class="tabs">${TABS.map(([k, l]) => `<button class="tab ${state.tab === k ? 'active' : ''}" data-tab="${k}">${l}</button>`).join('')}</nav>
+  </div></header>
+  <main class="wrap">${state.err ? `<div class="alert bad"><div><b>Error</b><br>${esc(state.err)}</div></div>` : ''}${body}</main>`;
+}
+
+/* ---------- events (delegated) ---------- */
+app.addEventListener('click', async e => {
+  const t = e.target.closest('[data-tab],[data-act]');
+  if (!t) return;
+  if (t.dataset.tab) { e.preventDefault(); state.tab = t.dataset.tab; renderApp(); window.scrollTo(0, 0); return; }
+  const act = t.dataset.act;
+  if (act === 'lock') return lock();
+  if (act === 'reload') {
+    t.disabled = true;
+    try { await loadData(); toast('Data reloaded'); } catch (ex) { state.err = ex.message; }
+    return renderApp();
+  }
+  if (act === 'snapshot') {
+    t.disabled = true; t.textContent = 'Saving…';
+    try { await takeSnapshot(); } catch (ex) { toast('Snapshot failed: ' + ex.message, 6000); renderApp(); }
+  }
+});
+app.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.done;
+  if (!k) return;
+  const done = lsGet(DONE_KEY) || {};
+  if (e.target.checked) done[k] = Date.now(); else delete done[k];
+  lsSet(DONE_KEY, done);
+  e.target.closest('.action').classList.toggle('done', e.target.checked);
+});
+
+// Auto-lock after 10 minutes in the background
+let hiddenAt = 0;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (state.token && hiddenAt && Date.now() - hiddenAt > 10 * 60 * 1000) lock();
+});
+
+/* ---------- boot ---------- */
+(async function boot() {
+  if (isLocalDev && qs.has('dev')) {
+    state.dev = true;
+    try { await loadData(); } catch (e) { state.err = 'Dev mode: could not load ' + (qs.get('data') || 'finances.json') + ' — ' + e.message; }
+    return renderApp();
+  }
+  if (!window.crypto || !crypto.subtle) { app.innerHTML = '<div class="center-screen"><div class="panel">This page must be opened over HTTPS (GitHub Pages) for encryption to work.</div></div>'; return; }
+  if (lsGet(CFG_KEY)) renderLock(); else renderSetup();
+})();
+</script>
+</body>
+</html>

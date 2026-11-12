@@ -157,7 +157,7 @@ function daysUntil(d, today) { return Math.round((d - today) / 86400000); }
 function settingsOf(data) {
   const s = Object.assign({
     monthlyDebtBudget: 1000, targetScore: 740, maxUtilizationPct: 30, idealUtilizationPct: 10,
-    feeSafetyPct: 90, payBeforeClosingDays: 3, defaultAprIfUnknown: 30, lastUpdated: null
+    feeSafetyPct: 90, payBeforeClosingDays: 3, defaultAprIfUnknown: 30, primaryScoreSource: 'Experian', lastUpdated: null
   }, data.settings || {});
   return s;
 }
@@ -186,6 +186,24 @@ function utilization(accts, balances) {
   const limit = util.reduce((t, a) => t + (+a.limit), 0);
   const bal = util.reduce((t, a) => t + (balances ? balances[a.id] : (+a.balance || 0)), 0);
   return { limit: r2(limit), balance: r2(bal), pct: limit > 0 ? bal / limit * 100 : 0 };
+}
+
+/** Scores grouped by source (bureau). Each list is oldest → newest. */
+function scoresBySource(data) {
+  const out = {};
+  (data.scores || []).filter(x => x && +x.score && parseDate(x.date)).forEach(x => {
+    const k = x.source || 'Unknown';
+    (out[k] = out[k] || []).push(x);
+  });
+  Object.values(out).forEach(l => l.sort((a, b) => parseDate(a.date) - parseDate(b.date)));
+  return out;
+}
+/** Latest score per source; the primary source (the one the target is judged against) first. */
+function latestScores(data, s) {
+  const by = scoresBySource(data);
+  const latest = Object.entries(by).map(([source, l]) => Object.assign({ source, prev: l.length > 1 ? l[l.length - 2] : null }, l[l.length - 1]));
+  latest.sort((a, b) => (b.source === s.primaryScoreSource) - (a.source === s.primaryScoreSource) || b.score - a.score);
+  return latest;
 }
 
 /**
@@ -400,7 +418,7 @@ function buildSnapshot(data, s, today) {
   const accts = activeAccounts(data);
   const u = utilization(accts);
   const cards = accts.filter(isCard); const inst = accts.filter(isInstallment);
-  const scores = (data.scores || []).filter(x => x && x.score).sort((x, y) => (parseDate(y.date) || 0) - (parseDate(x.date) || 0));
+  const scores = latestScores(data, s).map(({ prev, ...x }) => x);
   return {
     month: isoDate(today).slice(0, 7),
     takenAt: new Date().toISOString(),
@@ -411,6 +429,7 @@ function buildSnapshot(data, s, today) {
       utilizationPct: r2(u.pct), utilizationLimit: u.limit, cardsWithBalance: cards.filter(a => (+a.balance || 0) > 0).length
     },
     score: scores[0] || null,
+    scores,
     accounts: accts.map(a => ({ id: a.id, name: a.name, type: a.type, balance: r2(a.balance), limit: a.limit || null, apr: a.apr ?? null }))
   };
 }
@@ -679,14 +698,16 @@ function computeAll() {
   const alerts = buildAlerts(state.data, s, today);
   const util = utilization(accts);
   const totalDebt = r2(accts.reduce((t, a) => t + (+a.balance || 0), 0));
-  const scores = (state.data.scores || []).filter(x => x && x.score && parseDate(x.date)).sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  const scores = latestScores(state.data, s);
   return { s, today, accts, plan, proj, base, minsOnly, actions, alerts, util, totalDebt, scores };
 }
 
 function viewOverview(c) {
   const { s, util, totalDebt, proj, scores, alerts, actions, accts, plan } = c;
-  const latest = scores[scores.length - 1];
+  const latest = scores[0];
   const scoreGap = latest ? latest.score - s.targetScore : null;
+  const delta = x => x.prev ? (x.score - x.prev.score) : null;
+  const others = scores.slice(1).map(x => `${esc(x.source)} ${x.score}${delta(x) ? ` (${delta(x) > 0 ? '+' : ''}${delta(x)})` : ''}`).join(' · ');
   const cards = accts.filter(countsForUtil);
   const cardsWithBal = accts.filter(isCard).filter(a => (+a.balance || 0) > 0).length;
   const instDebt = r2(accts.filter(isInstallment).reduce((t, a) => t + (+a.balance || 0), 0));
@@ -708,7 +729,7 @@ function viewOverview(c) {
     <div class="panel"><div class="label">Card utilization</div><div class="big ${utilClass(util.pct, s)}">${util.pct.toFixed(0)}%</div>
       ${utilBar(util.pct, s)}<div class="sub">${money0(util.balance)} of ${money0(util.limit)} · target ≤ ${s.idealUtilizationPct}% (${money0(util.limit * s.idealUtilizationPct / 100)})</div></div>
     <div class="panel"><div class="label">Credit score</div>
-      ${latest ? `<div class="big ${scoreGap >= 0 ? 'good' : 'warn'}">${latest.score}</div><div class="sub">${scoreGap >= 0 ? `${scoreGap} above` : `${-scoreGap} below`} target ${s.targetScore} · ${esc(latest.source || '')} ${fmtShort(parseDate(latest.date))}</div>`
+      ${latest ? `<div class="big ${scoreGap >= 0 ? 'good' : 'warn'}">${latest.score}${delta(latest) ? ` <span class="sub">${delta(latest) > 0 ? '+' : ''}${delta(latest)}</span>` : ''}</div><div class="sub">${esc(latest.source)}${latest.model ? ' ' + esc(latest.model) : ''} · ${scoreGap >= 0 ? `${scoreGap} above` : `${-scoreGap} below`} target ${s.targetScore} · ${fmtShort(parseDate(latest.date))}</div>${others ? `<div class="sub">${others}</div>` : ''}`
         : `<div class="big muted">—</div><div class="sub">Target ${s.targetScore}. Log a score in finances.json.</div>`}</div>
     <div class="panel"><div class="label">Debt-free (at ${money0(s.monthlyDebtBudget)}/mo)</div>
       <div class="big">${proj.finished ? `${proj.months} mo` : '10+ yrs'}</div>
@@ -863,7 +884,7 @@ function viewHistory(c) {
   }
   const snaps = state.snapshots.slice().sort((a, b) => a.month.localeCompare(b.month));
   const thisMonth = isoDate(today).slice(0, 7);
-  const label = m => { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }); };
+  const label = m => { const [y, mo] = m.split('-').map(Number); return `${new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short' })} '${String(y).slice(2)}`; };
   const xl = snaps.map((x, i) => ({ x: i, label: label(x.month) }));
   const utilChart = snaps.length ? lineChart([{ name: 'Utilization', color: 'var(--accent)', points: snaps.map((x, i) => ({ x: i, y: x.totals.utilizationPct, title: `${label(x.month)}: ${x.totals.utilizationPct}%` })) }],
     { yFmt: v => v.toFixed(0) + '%', xLabels: xl, refs: [{ y: s.maxUtilizationPct, label: `${s.maxUtilizationPct}%`, color: 'var(--warn)' }, { y: s.idealUtilizationPct, label: `${s.idealUtilizationPct}%`, color: 'var(--good)' }] }) : '';
@@ -872,9 +893,20 @@ function viewHistory(c) {
     { name: 'Installments', color: 'var(--warn)', points: snaps.map((x, i) => ({ x: i, y: x.totals.installmentDebt, title: money0(x.totals.installmentDebt) })) },
     { name: 'Total', color: 'var(--text)', points: snaps.map((x, i) => ({ x: i, y: x.totals.debt, title: money0(x.totals.debt) })) }
   ], { yFmt: v => money0(v), xLabels: xl }) : '';
-  const scoreChart = scores.length ? lineChart([{ name: 'Score', color: 'var(--good)', points: scores.map((x, i) => ({ x: i, y: x.score, title: `${x.date}: ${x.score}` })) }],
-    { yMin: Math.min(...scores.map(x => x.score), s.targetScore) - 40, yFmt: v => v.toFixed(0), height: 180, refs: [{ y: s.targetScore, label: `Target ${s.targetScore}`, color: 'var(--good)' }],
-      xLabels: scores.map((x, i) => ({ x: i, label: fmtShort(parseDate(x.date)) })) }) : '<p class="sub">No scores logged yet. Add entries to <code>scores</code> in finances.json.</p>';
+  const bySource = scoresBySource(state.data);
+  const allScores = Object.values(bySource).flat();
+  const day0 = allScores.length ? Math.min(...allScores.map(x => parseDate(x.date).getTime())) : 0;
+  const dx = x => Math.round((parseDate(x.date).getTime() - day0) / 86400000);
+  const palette = ['var(--good)', 'var(--accent)', 'var(--warn)', 'var(--bad)'];
+  const dates = [...new Set(allScores.map(x => x.date))].sort();
+  const scoreChart = allScores.length ? lineChart(
+    Object.entries(bySource).sort((a, b) => (b[0] === s.primaryScoreSource) - (a[0] === s.primaryScoreSource))
+      .map(([src, l], i) => ({ name: `${src}${l[l.length - 1].model ? ' (' + l[l.length - 1].model + ')' : ''}`, color: palette[i % palette.length], points: l.map(x => ({ x: dx(x), y: x.score, title: `${src} ${x.date}: ${x.score}` })) })),
+    { yMin: Math.floor((Math.min(...allScores.map(x => x.score), s.targetScore) - 40) / 10) * 10, yFmt: v => v.toFixed(0), height: 200, legend: true,
+      refs: [{ y: s.targetScore, label: `Target ${s.targetScore}`, color: 'var(--good)' }],
+      xLabels: dates.map(d => ({ x: dx({ date: d }), label: fmtShort(parseDate(d)) })) })
+    + `<p class="sub">The target is judged on ${esc(s.primaryScoreSource)}. Different apps use different scoring models, so the numbers won't match; watch each line's trend.</p>`
+    : '<p class="sub">No scores logged yet. Add entries to <code>scores</code> in finances.json.</p>';
   const rows = snaps.slice().reverse().map(x => `<tr><td>${label(x.month)}</td><td class="num">${money0(x.totals.debt)}</td><td class="num">${money0(x.totals.cardDebt)}</td><td class="num">${money0(x.totals.installmentDebt)}</td><td class="num ${utilClass(x.totals.utilizationPct, s)}">${x.totals.utilizationPct}%</td><td class="num">${x.score ? x.score.score : '—'}</td></tr>`).join('');
   return `
   <section class="panel"><div class="row-flex"><h2 style="margin:0">Monthly snapshots</h2><span class="spacer"></span>
